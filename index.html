@@ -7,8 +7,25 @@
     <link rel="stylesheet" href="src/style.css" />
   </head>
   <body>
-    <h1>Bricks Game</h1>
-    <canvas id="game" aria-label="Bricks Game canvas"></canvas>
+    <header class="topbar">
+      <h1>Bricks Game</h1>
+      <div class="hud">
+        <div class="hud-item">Score: <span id="score">0</span></div>
+        <div class="hud-item">Lives: <span id="lives">3</span></div>
+        <div class="hud-item">Level: <span id="level">1</span></div>
+      </div>
+    </header>
+
+    <main>
+      <canvas id="game" aria-label="Bricks Game canvas"></canvas>
+      <div id="overlay" class="overlay hidden">
+        <div id="overlay-text"></div>
+        <button id="restart">Restart</button>
+      </div>
+    </main>
+
+    <footer class="help">Use ← → or A / D to move. Click or move mouse to control paddle. Press Space to (re)start.</footer>
+
     <script src="src/game.js"></script>
   </body>
 </html>
