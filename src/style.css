@@ -1,0 +1,21 @@
+/* src/style.css — center the canvas and keep layout simple */
+html,body{
+  height:100%;
+  margin:0;
+  background:#0f1720;
+  color:#e6eef8;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+}
+body{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:12px;
+  padding:24px;
+}
+canvas{
+  background:#0b1220;
+  border:2px solid rgba(255,255,255,0.06);
+  box-shadow: 0 8px 30px rgba(2,6,23,0.6);
+  display:block;
+}

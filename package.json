@@ -1,0 +1,9 @@
+{
+  "name": "bricks-game",
+  "version": "0.1.0",
+  "description": "HTML5 Canvas brick-breaker starter",
+  "scripts": {
+    "start": "npx serve . -l 3000"
+  },
+  "license": "MIT"
+}
