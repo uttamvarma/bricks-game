@@ -10,6 +10,13 @@ const levelEl = document.getElementById('level');
 const overlay = document.getElementById('overlay');
 const overlayText = document.getElementById('overlay-text');
 const restartBtn = document.getElementById('restart');
+const resumeBtn = document.getElementById('resume');
+const pauseBtn = document.getElementById('pause-btn');
+const levelSelect = document.getElementById('level-select');
+const fullscreenBtn = document.getElementById('fullscreen-btn');
+const topbar = document.querySelector('.topbar');
+const canvasWrap = document.querySelector('.canvas-wrap');
+const helpBar = document.querySelector('.help');
 
 const CANVAS_RATIO = 16 / 10;
 
@@ -17,30 +24,132 @@ function resize() {
   const prevWidth = canvas.width || null;
   const prevHeight = canvas.height || null;
 
-  const isCompact = window.innerWidth < 640;
-  const horizontalMargin = isCompact ? 28 : 120;
-  const verticalMargin = isCompact ? 180 : 280;
-  const maxWidth = Math.max(320, Math.min(900, window.innerWidth - horizontalMargin));
-  const maxHeight = Math.max(420, Math.min(720, window.innerHeight - verticalMargin));
+  const computeCanvasSize = () => {
+    const bodyStyles = window.getComputedStyle(document.body);
+    const paddingX =
+      (parseFloat(bodyStyles.paddingLeft) || 0) + (parseFloat(bodyStyles.paddingRight) || 0);
+    const paddingY =
+      (parseFloat(bodyStyles.paddingTop) || 0) + (parseFloat(bodyStyles.paddingBottom) || 0);
+    const gap = parseFloat(bodyStyles.rowGap || bodyStyles.gap || '0') || 0;
+    const visibleChildren = Array.from(document.body.children).filter(
+      (el) => el && el.offsetParent !== null
+    );
+    const verticalGaps = gap * Math.max(0, visibleChildren.length - 1);
 
-  let width = Math.round(maxWidth);
-  let height = Math.round(width / CANVAS_RATIO);
+    const topbarHeight = topbar?.offsetHeight ?? 0;
+    const helpHeight = helpBar?.offsetHeight ?? 0;
 
-  if (height > maxHeight) {
-    height = Math.round(maxHeight);
-    width = Math.round(height * CANVAS_RATIO);
+    const wrapStyles = canvasWrap ? window.getComputedStyle(canvasWrap) : null;
+    const borderLeft = wrapStyles ? parseFloat(wrapStyles.borderLeftWidth) || 0 : 0;
+    const borderRight = wrapStyles ? parseFloat(wrapStyles.borderRightWidth) || 0 : 0;
+    const borderTop = wrapStyles ? parseFloat(wrapStyles.borderTopWidth) || 0 : 0;
+    const borderBottom = wrapStyles ? parseFloat(wrapStyles.borderBottomWidth) || 0 : 0;
+    const paddingLeft = wrapStyles ? parseFloat(wrapStyles.paddingLeft) || 0 : 0;
+    const paddingRight = wrapStyles ? parseFloat(wrapStyles.paddingRight) || 0 : 0;
+    const paddingTop = wrapStyles ? parseFloat(wrapStyles.paddingTop) || 0 : 0;
+    const paddingBottom = wrapStyles ? parseFloat(wrapStyles.paddingBottom) || 0 : 0;
+
+    const chromeX = borderLeft + borderRight + paddingLeft + paddingRight;
+    const chromeY = borderTop + borderBottom + paddingTop + paddingBottom;
+
+    const isFullscreen =
+      Boolean(document.fullscreenElement) || document.body.classList.contains('fullscreen-active');
+    let widthViewport = Math.floor(window.innerWidth - paddingX - chromeX);
+    let heightViewport = Math.floor(
+      window.innerHeight - paddingY - verticalGaps - topbarHeight - helpHeight - chromeY
+    );
+
+    widthViewport = Math.max(1, widthViewport);
+    heightViewport = Math.max(1, heightViewport);
+
+    const minWidthAllowed = Math.min(widthViewport, 320);
+    const minHeightAllowed = Math.min(heightViewport, 240);
+
+    let widthLimit = isFullscreen ? widthViewport : Math.min(widthViewport, 900 - chromeX);
+    widthLimit = Math.min(widthLimit, widthViewport);
+    widthLimit = Math.max(minWidthAllowed, widthLimit);
+
+    let heightLimit = isFullscreen ? heightViewport : Math.min(heightViewport, 720);
+    heightLimit = Math.min(heightLimit, heightViewport);
+    heightLimit = Math.max(minHeightAllowed, heightLimit);
+
+    let width = Math.floor(widthLimit);
+    let height = Math.floor(width / CANVAS_RATIO);
+
+    if (height > heightLimit) {
+      height = Math.floor(heightLimit);
+      width = Math.floor(height * CANVAS_RATIO);
+    }
+
+    if (width > widthLimit) {
+      width = Math.floor(widthLimit);
+      height = Math.floor(width / CANVAS_RATIO);
+    }
+
+    if (width < minWidthAllowed) {
+      width = Math.floor(minWidthAllowed);
+      height = Math.floor(width / CANVAS_RATIO);
+    }
+
+    if (height > heightLimit) {
+      height = Math.floor(heightLimit);
+      width = Math.floor(height * CANVAS_RATIO);
+    }
+
+    if (height < minHeightAllowed) {
+      height = Math.floor(minHeightAllowed);
+      width = Math.floor(height * CANVAS_RATIO);
+      if (width > widthLimit) {
+        width = Math.floor(widthLimit);
+        height = Math.floor(width / CANVAS_RATIO);
+      }
+    }
+
+    width = Math.max(minWidthAllowed, Math.min(width, widthViewport));
+    height = Math.max(minHeightAllowed, Math.min(height, heightViewport));
+
+    return {
+      width,
+      height,
+      chromeX,
+      chromeY
+    };
+  };
+
+  const applyCanvasSize = (size) => {
+    const { width, height, chromeX, chromeY } = size;
+    canvas.width = width;
+    canvas.height = height;
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+    if (canvasWrap) {
+      const wrapWidth = width + chromeX;
+      const wrapHeight = height + chromeY;
+      canvasWrap.style.width = `${wrapWidth}px`;
+      canvasWrap.style.height = `${wrapHeight}px`;
+      canvasWrap.style.maxWidth = `${wrapWidth}px`;
+      canvasWrap.style.maxHeight = `${wrapHeight}px`;
+      canvasWrap.style.minWidth = `${wrapWidth}px`;
+      canvasWrap.style.minHeight = `${wrapHeight}px`;
+    }
+  };
+
+  const initialSize = computeCanvasSize();
+  applyCanvasSize(initialSize);
+
+  const recalculated = computeCanvasSize();
+  if (
+    Math.abs(recalculated.width - initialSize.width) > 1 ||
+    Math.abs(recalculated.height - initialSize.height) > 1
+  ) {
+    applyCanvasSize(recalculated);
   }
-
-  canvas.width = width;
-  canvas.height = height;
-  canvas.style.width = `${width}px`;
-  canvas.style.height = `${height}px`;
 
   layoutBricks();
 
   if (megaCat) {
-    const scaleX = prevWidth ? width / prevWidth : 1;
-    const scaleY = prevHeight ? height / prevHeight : 1;
+    const scaleX = prevWidth ? canvas.width / prevWidth : 1;
+    const scaleY = prevHeight ? canvas.height / prevHeight : 1;
     megaCat.x *= scaleX;
     megaCat.y *= scaleY;
     megaCat.radius = Math.max(36, Math.min(66, Math.min(canvas.width, canvas.height) * 0.085));
@@ -264,6 +373,8 @@ let lives = 3;
 let level = 1;
 let levelIndex = 0;
 let playing = false;
+let paused = false;
+let pauseOverlayActive = false;
 let lastTs = performance.now();
 let keys = { left: false, right: false };
 let creatures = [];
@@ -298,6 +409,9 @@ window.addEventListener('resize', () => {
 resize();
 
 function init() {
+  populateLevelSelect();
+  updatePauseButton();
+  updateFullscreenButton();
   startLevel(0, { message: levels[0]?.intro });
 }
 
@@ -312,6 +426,8 @@ function startLevel(index, options = {}) {
   catCelebrationTimer = 0;
   pendingLevelAfterCelebration = null;
   catCelebrationOriginLevel = null;
+  paused = false;
+  pauseOverlayActive = false;
   finaleDanceActive = false;
   finaleDanceTimer = 0;
   finaleDanceComplete = false;
@@ -319,6 +435,8 @@ function startLevel(index, options = {}) {
   specialBricksRemaining = 0;
   initBricks();
   updateHUD();
+  syncLevelSelect();
+  updatePauseButton();
   playing = false;
   if (options.showOverlay !== false) {
     const message = options.message ?? levels[levelIndex]?.intro ?? `Level ${level} — Press Space to Start`;
@@ -407,15 +525,119 @@ function updateHUD() {
 
 function showOverlay(text, options = {}) {
   const showRestartButton = Boolean(options.showRestartButton);
+  const showResumeButton = Boolean(options.showResumeButton);
+  pauseOverlayActive = Boolean(options.fromPause);
   overlayText.textContent = text;
   restartBtn.classList.toggle('hidden', !showRestartButton);
   restartBtn.disabled = !showRestartButton;
   restartBtn.setAttribute('aria-hidden', String(!showRestartButton));
+  if (resumeBtn) {
+    resumeBtn.classList.toggle('hidden', !showResumeButton);
+    resumeBtn.disabled = !showResumeButton;
+    resumeBtn.setAttribute('aria-hidden', String(!showResumeButton));
+  }
   overlay.classList.remove('hidden');
+  const focusTarget = options.focusButton === 'resume' && showResumeButton
+    ? resumeBtn
+    : options.focusButton === 'restart' && showRestartButton
+      ? restartBtn
+      : null;
+  if (focusTarget) {
+    focusTarget.focus();
+  }
 }
 
 function hideOverlay() {
+  pauseOverlayActive = false;
+  if (resumeBtn) {
+    resumeBtn.classList.add('hidden');
+    resumeBtn.disabled = true;
+    resumeBtn.setAttribute('aria-hidden', 'true');
+  }
+  restartBtn.classList.add('hidden');
+  restartBtn.disabled = true;
+  restartBtn.setAttribute('aria-hidden', 'true');
   overlay.classList.add('hidden');
+}
+
+function updatePauseButton() {
+  if (!pauseBtn) return;
+  const canUse = playing || paused;
+  const disabled = (!canUse && !paused) || catCelebrationActive || finaleDanceActive;
+  pauseBtn.disabled = disabled;
+  pauseBtn.textContent = paused ? 'Resume' : 'Pause';
+  pauseBtn.setAttribute('aria-pressed', String(paused));
+}
+
+function syncLevelSelect() {
+  if (!levelSelect) return;
+  const desiredValue = String(levelIndex);
+  if (levelSelect.value !== desiredValue) {
+    levelSelect.value = desiredValue;
+  }
+}
+
+function populateLevelSelect() {
+  if (!levelSelect) return;
+  levelSelect.innerHTML = '';
+  levels.forEach((lvl, idx) => {
+    const option = document.createElement('option');
+    option.value = String(idx);
+    const id = lvl.id ?? idx + 1;
+    let label = `Level ${id}`;
+    if (typeof lvl.intro === 'string' && lvl.intro.includes('—')) {
+      label = lvl.intro.split('—')[0].trim();
+    }
+    option.textContent = label;
+    levelSelect.appendChild(option);
+  });
+  syncLevelSelect();
+}
+
+function setPaused(value) {
+  if (value) {
+    if (paused || !playing || catCelebrationActive || finaleDanceActive) return;
+    paused = true;
+    updatePauseButton();
+    showOverlay('Paused — Press Resume or P', {
+      showResumeButton: true,
+      fromPause: true,
+      focusButton: 'resume'
+    });
+    return;
+  }
+
+  if (!paused) return;
+  paused = false;
+  updatePauseButton();
+  if (pauseOverlayActive) {
+    pauseOverlayActive = false;
+    hideOverlay();
+  }
+}
+
+function togglePause(forceValue) {
+  const target = typeof forceValue === 'boolean' ? forceValue : !paused;
+  setPaused(target);
+}
+
+function updateFullscreenButton() {
+  if (!fullscreenBtn) return;
+  const active = Boolean(document.fullscreenElement);
+  fullscreenBtn.textContent = active ? 'Exit Fullscreen' : 'Enter Fullscreen';
+  fullscreenBtn.setAttribute('aria-pressed', String(active));
+}
+
+async function toggleFullscreen() {
+  try {
+    if (!document.fullscreenElement) {
+      await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+    } else {
+      await document.exitFullscreen();
+    }
+  } catch (err) {
+    console.error('Failed to toggle fullscreen', err);
+  }
 }
 
 function restart() {
@@ -428,25 +650,91 @@ restartBtn.addEventListener('click', () => {
   restart();
   hideOverlay();
   playing = true;
+  paused = false;
+  pauseOverlayActive = false;
+  updatePauseButton();
+});
+
+if (resumeBtn) {
+  resumeBtn.addEventListener('click', () => {
+    setPaused(false);
+  });
+}
+
+if (pauseBtn) {
+  pauseBtn.addEventListener('click', () => {
+    togglePause();
+  });
+}
+
+if (levelSelect) {
+  levelSelect.addEventListener('change', (event) => {
+    const idx = Number.parseInt(event.target.value, 10);
+    if (Number.isNaN(idx)) return;
+    paused = false;
+    pauseOverlayActive = false;
+    startLevel(idx, { message: levels[idx]?.intro });
+  });
+}
+
+if (fullscreenBtn) {
+  fullscreenBtn.addEventListener('click', () => {
+    toggleFullscreen();
+  });
+}
+
+document.addEventListener('fullscreenchange', () => {
+  const active = Boolean(document.fullscreenElement);
+  document.body.classList.toggle('fullscreen-active', active);
+  document.body.style.overflow = active ? 'hidden' : '';
+  document.documentElement.style.overflow = active ? 'hidden' : '';
+  updateFullscreenButton();
+  resize();
 });
 
 // Input
 window.addEventListener('keydown', (e) => {
+  if (e.code === 'KeyP') {
+    e.preventDefault();
+    if (paused) {
+      setPaused(false);
+    } else {
+      setPaused(true);
+    }
+    return;
+  }
+
+  if (e.code === 'Escape') {
+    if (paused) {
+      setPaused(false);
+    } else if (playing && !catCelebrationActive && !finaleDanceActive) {
+      setPaused(true);
+    }
+    return;
+  }
+
   if (finaleDanceActive) {
     interruptFinaleDance();
     return;
   }
+
   if (e.code === 'ArrowLeft' || e.key === 'a' || e.key === 'A') keys.left = true;
   if (e.code === 'ArrowRight' || e.key === 'd' || e.key === 'D') keys.right = true;
   if (e.code === 'Space') {
+    e.preventDefault();
+    if (paused) {
+      setPaused(false);
+      return;
+    }
     if (isFinalLevel() && finaleDanceComplete) {
       return;
     }
     if (!playing) {
       hideOverlay();
       playing = true;
+      updatePauseButton();
     }
-    if (overlay.classList.contains('hidden') === false) hideOverlay();
+    if (!overlay.classList.contains('hidden') && !pauseOverlayActive) hideOverlay();
   }
 });
 window.addEventListener('keyup', (e) => {
@@ -475,10 +763,21 @@ function startFromUserInput() {
     interruptFinaleDance();
     return;
   }
+  if (paused) {
+    setPaused(false);
+    return;
+  }
   if (isFinalLevel() && finaleDanceComplete) {
     return;
   }
-  if (!playing) { hideOverlay(); playing = true; }
+  if (!playing) {
+    hideOverlay();
+    playing = true;
+    updatePauseButton();
+  }
+  if (!overlay.classList.contains('hidden') && !pauseOverlayActive) {
+    hideOverlay();
+  }
 }
 
 canvas.addEventListener('click', () => {
@@ -548,7 +847,7 @@ function update(dt) {
 
   updateCreatures(dt);
 
-  if (!playing) return;
+  if (!playing || paused) return;
 
   // Paddle movement
   if (keys.left) paddle.x -= paddle.speed * dt;
@@ -602,6 +901,9 @@ function update(dt) {
     updateHUD();
     if (lives <= 0) {
       playing = false;
+      paused = false;
+      pauseOverlayActive = false;
+      updatePauseButton();
       showOverlay('Game Over — Press Restart', { showRestartButton: true });
     } else {
       resetBall();
@@ -657,6 +959,9 @@ function handleLevelClear() {
   }
 
   playing = false;
+  paused = false;
+  pauseOverlayActive = false;
+  updatePauseButton();
   if (!finaleDanceActive && !finaleDanceComplete) {
     startFinaleDance();
   } else if (finaleDanceComplete && !finaleOverlayShown) {
@@ -1285,6 +1590,9 @@ function startCatCelebration(nextIndex) {
   catCelebrationOriginLevel = level;
   pendingLevelAfterCelebration = Number.isInteger(nextIndex) ? nextIndex : null;
   playing = false;
+  paused = false;
+  pauseOverlayActive = false;
+  updatePauseButton();
   hideOverlay();
   creatures.forEach((creature) => {
     if (creature.type === 'cat') {
@@ -1424,6 +1732,9 @@ function completeCatCelebration() {
 
 function startFinaleDance() {
   finaleDanceActive = true;
+  paused = false;
+  pauseOverlayActive = false;
+  updatePauseButton();
   finaleDanceTimer = 0;
   hideOverlay();
   ensureFinaleCreatures();
@@ -1447,6 +1758,7 @@ function interruptFinaleDance() {
 function completeFinaleDance() {
   if (!finaleDanceActive) return;
   finaleDanceActive = false;
+  updatePauseButton();
   finaleDanceTimer = Math.min(finaleDanceTimer, FINALE_DANCE_DURATION);
   creatures.forEach((creature) => {
     if (creature.state === 'spookyDance') {

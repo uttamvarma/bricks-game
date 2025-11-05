@@ -56,6 +56,14 @@
           <dd id="level">1</dd>
         </div>
       </dl>
+      <div class="control-bar" role="group" aria-label="Game controls">
+        <button id="pause-btn" type="button" class="control-button">Pause</button>
+        <div class="control-select">
+          <label for="level-select">Level</label>
+          <select id="level-select" aria-label="Choose level to play"></select>
+        </div>
+        <button id="fullscreen-btn" type="button" class="control-button">Enter Fullscreen</button>
+      </div>
     </header>
 
     <main>
@@ -63,6 +71,7 @@
         <canvas id="game" aria-label="Bricks Game canvas"></canvas>
         <div id="overlay" class="overlay hidden" role="alert">
           <div id="overlay-text"></div>
+          <button id="resume" type="button" class="secondary hidden">Resume</button>
           <button id="restart" type="button">Restart</button>
         </div>
       </div>

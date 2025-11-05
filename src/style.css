@@ -27,6 +27,7 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
+  overflow-x: hidden;
 }
 
 body {
@@ -321,4 +322,99 @@ canvas {
   .hud-item dd {
     font-size: 1.5rem;
   }
+}
+
+.control-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.control-button {
+  padding: 10px 20px;
+  border-radius: 999px;
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.18), rgba(14, 165, 233, 0.45));
+  color: var(--text);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.control-button:hover,
+.control-button:focus {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 24px rgba(14, 165, 233, 0.25);
+  outline: none;
+}
+
+.control-button:focus-visible {
+  outline: 2px solid rgba(186, 230, 253, 0.8);
+  outline-offset: 2px;
+}
+
+.control-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(8px);
+  font-size: 0.95rem;
+}
+
+.control-select label {
+  font-weight: 600;
+  color: var(--text-subtle);
+}
+
+.control-select select {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-weight: 600;
+  padding: 6px 24px 6px 8px;
+  border-radius: 999px;
+  cursor: pointer;
+  position: relative;
+}
+
+.control-select select:focus-visible {
+  outline: 2px solid rgba(186, 230, 253, 0.6);
+  outline-offset: 2px;
+}
+
+.overlay .secondary {
+  background: transparent;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  color: var(--text);
+  padding: 10px 24px;
+}
+
+.overlay .secondary:hover,
+.overlay .secondary:focus {
+  box-shadow: 0 12px 24px rgba(148, 163, 184, 0.25);
+  transform: translateY(-1px);
+}
+
+body.fullscreen-active {
+  padding: clamp(8px, 2vw, 16px);
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
+}
+
+body.fullscreen-active .topbar,
+body.fullscreen-active .canvas-wrap,
+body.fullscreen-active .help {
+  width: min(100%, 1080px);
+}
+
+body.fullscreen-active .canvas-wrap {
+  max-height: none;
 }
