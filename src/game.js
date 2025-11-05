@@ -1,5 +1,4 @@
-// Playable demo: ball, paddle, bricks, score, lives, controls
-console.log('Bricks Game started — playable demo');
+console.log('Bricks Game started');
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
@@ -38,6 +37,17 @@ function resize() {
   canvas.style.height = `${height}px`;
 
   layoutBricks();
+
+  if (megaCat) {
+    const scaleX = prevWidth ? width / prevWidth : 1;
+    const scaleY = prevHeight ? height / prevHeight : 1;
+    megaCat.x *= scaleX;
+    megaCat.y *= scaleY;
+    megaCat.radius = Math.max(36, Math.min(66, Math.min(canvas.width, canvas.height) * 0.085));
+    megaCat.x = clamp(megaCat.x, megaCat.radius, canvas.width - megaCat.radius);
+    const floor = canvas.height - 70;
+    megaCat.y = Math.min(Math.max(megaCat.radius, megaCat.y), floor - megaCat.radius);
+  }
 
   paddle.x = Math.min(paddle.x, canvas.width - paddle.w);
 }
@@ -94,25 +104,48 @@ const levels = [
     id: 2,
     intro: 'Level 2 — Free the golden cats! Press Space to continue',
     build() {
-      const layout = [
-        { row: 0, col: 2 },
-        { row: 1, col: 1 },
+      const rows = 5;
+      const cols = 8;
+      const goldenLayout = [
+        { row: 0, col: 4 },
         { row: 1, col: 3 },
-        { row: 2, col: 0 },
-        { row: 2, col: 4 }
+        { row: 1, col: 5 },
+        { row: 2, col: 2 },
+        { row: 2, col: 6 }
       ];
-      const rows = 4;
-      const cols = 5;
+      const goldenSet = new Set(goldenLayout.map((pos) => `${pos.row}:${pos.col}`));
       const goldenColors = {
         base: '#fbbf24',
         accent: '#fde68a'
       };
-      const bricks = layout.map((pos) => ({
-        row: pos.row,
-        col: pos.col,
-        colors: goldenColors,
-        special: true
-      }));
+      const bricks = [];
+      for (let r = 0; r < rows; r++) {
+        const palette = brickPalette[r % brickPalette.length];
+        for (let c = 0; c < cols; c++) {
+          const key = `${r}:${c}`;
+          if (goldenSet.has(key)) {
+            bricks.push({
+              row: r,
+              col: c,
+              colors: goldenColors,
+              special: true,
+              hits: 3,
+              widthScale: 1.08,
+              heightScale: 1.08
+            });
+          } else {
+            bricks.push({
+              row: r,
+              col: c,
+              colors: {
+                base: palette[0],
+                accent: palette[1] ?? palette[0]
+              },
+              special: false
+            });
+          }
+        }
+      }
       return { rows, cols, bricks };
     }
   },
@@ -235,12 +268,20 @@ let lastTs = performance.now();
 let keys = { left: false, right: false };
 let creatures = [];
 let bricksRemaining = 0;
+let specialBricksRemaining = 0;
 let finaleDanceActive = false;
 let finaleDanceTimer = 0;
 let finaleDanceComplete = false;
 let finaleOverlayShown = false;
 const FINALE_DANCE_DURATION = 15;
 const FINALE_CREATURE_TYPES = ['ghost', 'jack', 'skeleton', 'bat'];
+let megaCat = null;
+let catCelebrationActive = false;
+let catCelebrationTimer = 0;
+let pendingLevelAfterCelebration = null;
+let catCelebrationOriginLevel = null;
+const CAT_MEGACAT_SPAWN_DELAY = 1.6;
+const CAT_CELEBRATION_MIN_DURATION = 4.2;
 
 function getCurrentTheme() {
   const levelTheme = levels[levelIndex]?.theme ?? {};
@@ -266,10 +307,16 @@ function startLevel(index, options = {}) {
   paddle.x = (canvas.width - paddle.w) / 2;
   resetBall();
   creatures = [];
+  megaCat = null;
+  catCelebrationActive = false;
+  catCelebrationTimer = 0;
+  pendingLevelAfterCelebration = null;
+  catCelebrationOriginLevel = null;
   finaleDanceActive = false;
   finaleDanceTimer = 0;
   finaleDanceComplete = false;
   finaleOverlayShown = false;
+  specialBricksRemaining = 0;
   initBricks();
   updateHUD();
   playing = false;
@@ -298,11 +345,19 @@ function layoutBricks() {
   const totalWidth = brick.w * cols + totalPadding;
   brick.offsetLeft = Math.max(margin, Math.floor((canvas.width - totalWidth) / 2));
   brick.offsetTop = Math.max(48, Math.round(canvas.height * 0.08));
+  const baseW = brick.w;
+  const baseH = brick.h;
   for (let b of bricks) {
-    b.x = brick.offsetLeft + b.col * (brick.w + brick.padding);
-    b.y = brick.offsetTop + b.row * (brick.h + brick.padding);
-    b.w = brick.w;
-    b.h = brick.h;
+    const cellX = brick.offsetLeft + b.col * (baseW + brick.padding);
+    const cellY = brick.offsetTop + b.row * (baseH + brick.padding);
+    const widthScale = b.widthScale ?? 1;
+    const heightScale = b.heightScale ?? 1;
+    const scaledW = baseW * widthScale;
+    const scaledH = baseH * heightScale;
+    b.w = scaledW;
+    b.h = scaledH;
+    b.x = cellX + (baseW - scaledW) / 2;
+    b.y = cellY + (baseH - scaledH) / 2;
   }
 }
 
@@ -326,6 +381,11 @@ function initBricks() {
     alive: true,
     colors: b.colors,
     special: Boolean(b.special),
+    maxHits: Math.max(1, b.hits ?? 1),
+    hitsRemaining: Math.max(1, b.hits ?? 1),
+    widthScale: b.widthScale ?? 1,
+    heightScale: b.heightScale ?? 1,
+    hitFlash: 0,
     pattern: b.pattern ?? null,
     patternColors: b.patternColors ?? null,
     icon: b.icon ?? null,
@@ -335,6 +395,7 @@ function initBricks() {
     id: b.id ?? `lv${level}-brick-${idx}`
   }));
   bricksRemaining = bricks.length;
+  specialBricksRemaining = bricks.reduce((count, brick) => count + (brick.special ? 1 : 0), 0);
   layoutBricks();
 }
 
@@ -467,7 +528,24 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
+function seededRandom(seed) {
+  const x = Math.sin(seed) * 43758.5453123;
+  return x - Math.floor(x);
+}
+
 function update(dt) {
+  for (let b of bricks) {
+    if (b.hitFlash > 0) {
+      b.hitFlash = Math.max(0, b.hitFlash - dt * 3.6);
+    }
+  }
+
+  if (catCelebrationActive) {
+    advanceCatCelebration(dt);
+  } else if (megaCat) {
+    updateMegaCat(dt);
+  }
+
   updateCreatures(dt);
 
   if (!playing) return;
@@ -534,9 +612,24 @@ function update(dt) {
 
 function handleBrickHit(brick) {
   if (!brick.alive) return;
+  const maxHits = Math.max(1, brick.maxHits ?? 1);
+  if (typeof brick.hitsRemaining !== 'number') {
+    brick.hitsRemaining = maxHits;
+  }
+  brick.hitFlash = 0.35;
+  score += brick.special ? 20 : 10;
+  brick.hitsRemaining = Math.max(0, brick.hitsRemaining - 1);
+
+  if (brick.hitsRemaining > 0) {
+    updateHUD();
+    return;
+  }
+
   brick.alive = false;
   bricksRemaining = Math.max(0, bricksRemaining - 1);
-  score += brick.special ? 20 : 10;
+  if (brick.special) {
+    specialBricksRemaining = Math.max(0, specialBricksRemaining - 1);
+  }
   const creatureType = getCreatureTypeForBrick(brick);
   if (creatureType) {
     releaseCreature(brick, creatureType);
@@ -551,6 +644,10 @@ function handleBrickHit(brick) {
 function handleLevelClear() {
   const clearedLevel = level;
   const nextIndex = levelIndex + 1;
+  if (levelIndex === 1 && !catCelebrationActive) {
+    startCatCelebration(nextIndex);
+    return;
+  }
   if (!isFinalLevel()) {
     if (nextIndex < levels.length) {
       const nextIntro = levels[nextIndex]?.intro ?? `Level ${nextIndex + 1} — Press Space to start`;
@@ -615,6 +712,12 @@ function render() {
     ctx.fillStyle = gradient;
     ctx.fillRect(b.x, b.y, b.w, b.h);
 
+    if (b.hitFlash > 0) {
+      const flashAlpha = Math.min(0.35, b.hitFlash * 0.9);
+      ctx.fillStyle = `rgba(255,255,255,${flashAlpha})`;
+      ctx.fillRect(b.x, b.y, b.w, b.h);
+    }
+
     if (b.pattern) {
       drawBrickPattern(b);
     }
@@ -623,6 +726,17 @@ function render() {
     ctx.strokeRect(b.x + 0.5, b.y + 0.5, b.w - 1, b.h - 1);
     ctx.fillStyle = 'rgba(255,255,255,0.12)';
     ctx.fillRect(b.x, b.y, b.w, 4);
+
+    if (b.maxHits > 1 && b.hitsRemaining > 0) {
+      const progress = 1 - b.hitsRemaining / b.maxHits;
+      const indicatorAlpha = 0.25 + progress * 0.5;
+      const lineWidth = Math.max(2, Math.round(Math.min(b.w, b.h) * 0.08));
+      ctx.save();
+      ctx.strokeStyle = `rgba(254, 249, 195, ${indicatorAlpha})`;
+      ctx.lineWidth = lineWidth;
+      ctx.strokeRect(b.x + lineWidth / 2, b.y + lineWidth / 2, b.w - lineWidth, b.h - lineWidth);
+      ctx.restore();
+    }
 
     if (b.special) {
       ctx.shadowBlur = 0;
@@ -636,12 +750,20 @@ function render() {
       ctx.fill();
     }
 
+    if (b.special && b.maxHits > 1 && b.hitsRemaining < b.maxHits) {
+      const crackStage = Math.max(0, Math.min(b.maxHits - b.hitsRemaining, b.maxHits));
+      if (crackStage > 0) {
+        drawGoldenCracks(b, crackStage, b.hitFlash, time);
+      }
+    }
+
     if (b.icon) {
       drawBrickIcon(b);
     }
   }
 
   renderCreatures();
+  renderMegaCat();
 
   // paddle
   const paddleGradient = ctx.createLinearGradient(paddle.x, canvas.height - 40, paddle.x, canvas.height - 40 + paddle.h);
@@ -702,6 +824,112 @@ function drawBrickPattern(brick) {
       ctx.fillStyle = colors.highlight;
       ctx.fillRect(brick.x, brick.y + brick.h * 0.18, brick.w, Math.max(2, Math.round(brick.h * 0.16)));
     }
+  }
+
+  ctx.restore();
+}
+
+function drawGoldenCracks(brick, stage, pulse = 0, time = performance.now() * 0.001) {
+  const { x, y, w, h } = brick;
+  const baseSeed = (brick.row ?? 0) * 97 + (brick.col ?? 0) * 131 + stage * 17;
+  const rand = (idx, min = 0, max = 1) => min + seededRandom(baseSeed + idx * 19.91) * (max - min);
+  const randCentered = (idx, range) => rand(idx, -range, range);
+
+  const shimmer = (Math.sin(time * 4.2 + baseSeed) + 1) * 0.5;
+  const pulseIntensity = Math.min(1, pulse * 1.8);
+  const baseAlpha = 0.2 + stage * 0.18;
+  const alpha = Math.min(0.95, baseAlpha + shimmer * 0.22 + pulseIntensity * 0.45);
+  const lineWidth = Math.max(1, Math.min(w, h) * (stage === 1 ? 0.042 : 0.052));
+
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.strokeStyle = `rgba(88, 28, 14, ${alpha})`;
+  ctx.lineWidth = lineWidth;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  const topY = h * 0.14;
+  const bottomY = h * 0.86;
+  const spanY = bottomY - topY;
+  const midX = w * 0.5;
+  const midY = h * 0.5;
+  const segmentCount = stage === 1 ? 4 : 6;
+
+  ctx.beginPath();
+  let currentX = midX + randCentered(1, w * 0.05);
+  let currentY = topY;
+  ctx.moveTo(currentX, currentY);
+
+  for (let i = 1; i <= segmentCount; i++) {
+    const nextY = topY + (spanY * i) / (segmentCount + 0.6) + randCentered(10 + i, h * 0.06);
+    const nextX = midX + randCentered(20 + i, w * 0.22);
+    ctx.lineTo(nextX, nextY);
+    currentX = nextX;
+    currentY = nextY;
+  }
+  ctx.lineTo(currentX + randCentered(200, w * 0.12), bottomY + randCentered(201, h * 0.05));
+  ctx.stroke();
+
+  const branchCount = stage === 1 ? 2 : 5;
+  for (let b = 0; b < branchCount; b++) {
+    const branchStartT = rand(300 + b, 0.18, 0.88);
+    const startY = topY + spanY * branchStartT;
+    const startX = midX + randCentered(320 + b, w * 0.16);
+    const direction = rand(340 + b) > 0.5 ? 1 : -1;
+    const branchSegments = stage === 1 ? 2 : 3;
+    let bx = startX;
+    let by = startY;
+    ctx.beginPath();
+    ctx.moveTo(bx, by);
+    for (let s = 1; s <= branchSegments; s++) {
+      const stepX = direction * rand(360 + b * 10 + s, w * 0.04, w * 0.12);
+      const stepY = rand(380 + b * 10 + s, h * 0.05, h * 0.16);
+      bx += stepX + randCentered(400 + b * 10 + s, w * 0.03);
+      by += stepY + randCentered(420 + b * 10 + s, h * 0.03);
+      ctx.lineTo(bx, Math.min(by, bottomY + h * 0.12));
+      if (by > bottomY) break;
+    }
+    ctx.stroke();
+  }
+
+  const highlightAlpha = Math.min(0.5, alpha * 0.65);
+  ctx.strokeStyle = `rgba(254, 252, 232, ${highlightAlpha})`;
+  ctx.lineWidth = Math.max(0.6, lineWidth * 0.45);
+  ctx.beginPath();
+  ctx.moveTo(midX + randCentered(500, w * 0.05), topY + h * 0.12);
+  ctx.lineTo(midX + randCentered(520, w * 0.08), midY - h * 0.08);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(midX + randCentered(540, w * 0.04), midY + h * 0.02);
+  ctx.lineTo(midX + randCentered(560, w * 0.1), bottomY - h * 0.1);
+  ctx.stroke();
+
+  if (stage >= 2) {
+    const chipCount = 2 + Math.floor(rand(600, 0, 3));
+    ctx.fillStyle = `rgba(120, 53, 15, ${0.28 + pulseIntensity * 0.35})`;
+    for (let i = 0; i < chipCount; i++) {
+      const fromLeft = rand(610 + i) > 0.5;
+      const baseY = topY + spanY * rand(620 + i, 0.2, 0.92);
+      const chipWidth = w * rand(630 + i, 0.05, 0.12);
+      const chipHeight = h * rand(640 + i, 0.06, 0.12);
+      ctx.beginPath();
+      if (fromLeft) {
+        ctx.moveTo(0, baseY);
+        ctx.lineTo(chipWidth, baseY - chipHeight * 0.35);
+        ctx.lineTo(chipWidth * 0.55, baseY + chipHeight * 0.5);
+      } else {
+        ctx.moveTo(w, baseY);
+        ctx.lineTo(w - chipWidth, baseY - chipHeight * 0.35);
+        ctx.lineTo(w - chipWidth * 0.55, baseY + chipHeight * 0.5);
+      }
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    ctx.fillStyle = `rgba(254, 240, 138, ${0.12 + shimmer * 0.18})`;
+    ctx.beginPath();
+    ctx.ellipse(midX + randCentered(700, w * 0.05), midY + randCentered(720, h * 0.06), w * 0.2, h * 0.14, randCentered(740, Math.PI * 0.08), 0, Math.PI * 2);
+    ctx.fill();
   }
 
   ctx.restore();
@@ -1015,7 +1243,7 @@ function releaseCreature(brick, type) {
     size: baseSize,
     alpha: 1,
     wiggleSeed: Math.random() * Math.PI * 2,
-    state: finaleDanceActive ? 'spookyDance' : 'free',
+    state: type === 'cat' ? 'catCelebrate' : finaleDanceActive ? 'spookyDance' : 'free',
     palette,
     danceAngle: Math.random() * Math.PI * 2,
     danceRadius: 0.16 + Math.random() * 0.08,
@@ -1048,6 +1276,150 @@ function ensureFinaleCreatures() {
     creature.homeAnchorX = pos.x;
     creature.homeAnchorY = pos.y;
   });
+}
+
+function startCatCelebration(nextIndex) {
+  if (catCelebrationActive) return;
+  catCelebrationActive = true;
+  catCelebrationTimer = 0;
+  catCelebrationOriginLevel = level;
+  pendingLevelAfterCelebration = Number.isInteger(nextIndex) ? nextIndex : null;
+  playing = false;
+  hideOverlay();
+  creatures.forEach((creature) => {
+    if (creature.type === 'cat') {
+      creature.state = 'catMerge';
+      creature.mergeTargetX = 0.5;
+      creature.mergeTargetY = 0.36;
+      creature.mergeFadeStart = 1.25;
+    }
+  });
+}
+
+function advanceCatCelebration(dt) {
+  if (!catCelebrationActive) return;
+  catCelebrationTimer += dt;
+
+  if (!megaCat && catCelebrationTimer >= CAT_MEGACAT_SPAWN_DELAY) {
+    spawnMegaCat();
+  }
+
+  if (megaCat) {
+    updateMegaCat(dt);
+  }
+
+  const readyForNext =
+    (megaCat && megaCat.settled && catCelebrationTimer >= CAT_CELEBRATION_MIN_DURATION) ||
+    catCelebrationTimer >= CAT_CELEBRATION_MIN_DURATION + 4;
+  if (readyForNext) {
+    completeCatCelebration();
+  }
+}
+
+function spawnMegaCat() {
+  const radius = Math.max(36, Math.min(66, Math.min(canvas.width, canvas.height) * 0.085));
+  megaCat = {
+    x: canvas.width / 2,
+    y: canvas.height * 0.32,
+    vx: (Math.random() > 0.5 ? 1 : -1) * 160,
+    vy: -300,
+    radius,
+    timer: 0,
+    settled: false,
+    bounces: 0
+  };
+  creatures = creatures.filter((creature) => creature.type !== 'cat');
+}
+
+function updateMegaCat(dt) {
+  if (!megaCat) return;
+  megaCat.timer += dt;
+  megaCat.vy += 540 * dt;
+  megaCat.x += megaCat.vx * dt;
+  megaCat.y += megaCat.vy * dt;
+
+  const floor = canvas.height - 70;
+  if (megaCat.y + megaCat.radius > floor) {
+    megaCat.y = floor - megaCat.radius;
+    const impactSpeed = Math.abs(megaCat.vy);
+    if (impactSpeed < 40) {
+      megaCat.vy = 0;
+      megaCat.settled = true;
+    } else {
+      megaCat.vy *= -0.82;
+      megaCat.bounces = (megaCat.bounces ?? 0) + 1;
+      if (Math.abs(megaCat.vy) < 120) {
+        megaCat.vy = -180;
+      }
+    }
+  }
+
+  if (megaCat.x - megaCat.radius < 0) {
+    megaCat.x = megaCat.radius;
+    megaCat.vx *= -1;
+  } else if (megaCat.x + megaCat.radius > canvas.width) {
+    megaCat.x = canvas.width - megaCat.radius;
+    megaCat.vx *= -1;
+  }
+
+  if (megaCat.settled) {
+    megaCat.vx *= 0.9;
+    if (Math.abs(megaCat.vx) < 8) {
+      megaCat.vx = 0;
+    }
+  } else {
+    megaCat.vx *= 0.995;
+  }
+
+  if (megaCat.timer > 8) {
+    megaCat.settled = true;
+  }
+}
+
+function renderMegaCat() {
+  if (!megaCat) return;
+  const shadowY = canvas.height - 70;
+  const bounce = Math.max(0, shadowY - (megaCat.y + megaCat.radius));
+  const shadowScale = 1 + Math.min(0.6, bounce / 120);
+  ctx.save();
+  ctx.globalAlpha = 0.24;
+  ctx.fillStyle = '#f59e0b';
+  ctx.beginPath();
+  ctx.ellipse(megaCat.x, shadowY + 14, megaCat.radius * shadowScale, megaCat.radius * 0.38, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  ctx.save();
+  ctx.translate(megaCat.x, megaCat.y);
+  const palette = {
+    ...getCreaturePalette('cat'),
+    body: '#fde047',
+    accent: '#f97316',
+    highlight: '#fef08a'
+  };
+  const size = megaCat.radius * 1.55;
+  drawCatSprite(size, palette, megaCat.timer);
+  ctx.restore();
+}
+
+function completeCatCelebration() {
+  if (!catCelebrationActive) return;
+  const nextIndex = pendingLevelAfterCelebration;
+  const originLevel = catCelebrationOriginLevel ?? level;
+  catCelebrationActive = false;
+  catCelebrationTimer = 0;
+  pendingLevelAfterCelebration = null;
+  catCelebrationOriginLevel = null;
+  megaCat = null;
+  creatures = [];
+  const hasNextLevel = typeof nextIndex === 'number' && nextIndex < levels.length;
+  if (hasNextLevel) {
+    const nextIntro = levels[nextIndex]?.intro ?? `Level ${nextIndex + 1} — Press Space to start`;
+    const message = `Level ${originLevel} complete! ${nextIntro}`;
+    startLevel(nextIndex, { message });
+  } else {
+    showOverlay(`Level ${originLevel} complete! Press Restart`, { showRestartButton: true });
+  }
 }
 
 function startFinaleDance() {
@@ -1117,6 +1489,33 @@ function updateCreatures(dt) {
   for (let creature of creatures) {
     creature.timer += dt;
     switch (creature.state) {
+      case 'catCelebrate': {
+        const bob = Math.sin(creature.timer * 5.6 + creature.wiggleSeed) * (creature.size * 0.22);
+        const sway = Math.sin(creature.timer * 2 + creature.wiggleSeed * 0.6) * (creature.size * 0.15);
+        creature.offsetY = bob;
+        creature.offsetX = sway;
+        creature.rotation = Math.sin(creature.timer * 1.4 + creature.wiggleSeed) * 0.12;
+        creature.anchorX += (creature.homeAnchorX - creature.anchorX) * Math.min(1, dt * 1.1);
+        creature.anchorY += (creature.homeAnchorY - creature.anchorY) * Math.min(1, dt * 1.1);
+        break;
+      }
+      case 'catMerge': {
+        const targetX = creature.mergeTargetX ?? 0.5;
+        const targetY = creature.mergeTargetY ?? 0.36;
+        const lerpX = Math.min(1, dt * 2.6);
+        const lerpY = Math.min(1, dt * 2.4);
+        creature.anchorX += (targetX - creature.anchorX) * lerpX;
+        creature.anchorY += (targetY - creature.anchorY) * lerpY;
+        creature.offsetX *= Math.max(0, 1 - dt * 5.2);
+        creature.offsetY *= Math.max(0, 1 - dt * 5.2);
+        creature.rotation *= Math.max(0, 1 - dt * 5.4);
+        const fadeStart = creature.mergeFadeStart ?? 1.2;
+        if (catCelebrationTimer > fadeStart) {
+          const fadeProgress = Math.min(1, (catCelebrationTimer - fadeStart) * 1.15);
+          creature.alpha = Math.max(0, 1 - fadeProgress);
+        }
+        break;
+      }
       case 'free': {
         const bob = Math.sin(creature.timer * 4.6 + creature.wiggleSeed) * (creature.size * 0.22);
         const sway = Math.sin(creature.timer * 1.8 + creature.wiggleSeed * 0.6) * (creature.size * 0.14);
