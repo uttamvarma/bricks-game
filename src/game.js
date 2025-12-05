@@ -3,20 +3,342 @@ console.log('Bricks Game started');
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 
-// DOM HUD
+// DOM HUD Elements
 const scoreEl = document.getElementById('score');
 const livesEl = document.getElementById('lives');
 const levelEl = document.getElementById('level');
-const overlay = document.getElementById('overlay');
-const overlayText = document.getElementById('overlay-text');
-const restartBtn = document.getElementById('restart');
-const resumeBtn = document.getElementById('resume');
+const highScoreEl = document.getElementById('high-score');
+const progressFill = document.getElementById('progress-fill');
+
+// Overlay Elements
+const levelOverlay = document.getElementById('level-overlay');
+const levelBadge = document.getElementById('level-badge');
+const levelTitle = document.getElementById('level-title');
+const pauseOverlay = document.getElementById('pause-overlay');
+const pauseScoreEl = document.getElementById('pause-score');
+const pauseLevelEl = document.getElementById('pause-level');
+const pauseLivesEl = document.getElementById('pause-lives');
+const gameoverOverlay = document.getElementById('gameover-overlay');
+const finalScoreEl = document.getElementById('final-score');
+const finalHighScoreEl = document.getElementById('final-high-score');
+const finalBricksEl = document.getElementById('final-bricks');
+const finalLevelEl = document.getElementById('final-level');
+const newHighScoreEl = document.getElementById('new-high-score');
+const victoryOverlay = document.getElementById('victory-overlay');
+const victoryScoreEl = document.getElementById('victory-score');
+const victoryHighScoreEl = document.getElementById('victory-high-score');
+
+// Control Buttons
+const muteBtn = document.getElementById('mute-btn');
 const pauseBtn = document.getElementById('pause-btn');
-const levelSelect = document.getElementById('level-select');
 const fullscreenBtn = document.getElementById('fullscreen-btn');
-const topbar = document.querySelector('.topbar');
-const canvasWrap = document.querySelector('.canvas-wrap');
-const helpBar = document.querySelector('.help');
+const resumeBtn = document.getElementById('resume-btn');
+const pauseRestartBtn = document.getElementById('pause-restart-btn');
+const gameoverRestartBtn = document.getElementById('gameover-restart-btn');
+const victoryRestartBtn = document.getElementById('victory-restart-btn');
+const pauseSoundToggle = document.getElementById('pause-sound-toggle');
+const pauseLevelSelect = document.getElementById('pause-level-select');
+
+// Layout Elements
+const gameHeader = document.querySelector('.game-header');
+const canvasContainer = document.querySelector('.canvas-container');
+const gameFooter = document.querySelector('.game-footer');
+
+// Game stats tracking
+let gameStats = {
+  bricksBroken: 0,
+  totalPlayTime: 0,
+  sessionStartTime: null
+};
+
+// =====================================================
+// HIGH SCORE MANAGER
+// =====================================================
+class HighScoreManager {
+  constructor() {
+    this.storageKey = 'bricks-game-highscore';
+  }
+
+  getHighScore() {
+    const stored = localStorage.getItem(this.storageKey);
+    return stored ? parseInt(stored, 10) : 0;
+  }
+
+  setHighScore(score) {
+    localStorage.setItem(this.storageKey, String(score));
+  }
+
+  checkAndUpdate(score) {
+    const current = this.getHighScore();
+    if (score > current) {
+      this.setHighScore(score);
+      return true;
+    }
+    return false;
+  }
+}
+
+const highScoreManager = new HighScoreManager();
+
+// =====================================================
+// AUDIO MANAGER
+// =====================================================
+class AudioManager {
+  constructor() {
+    this.ctx = null;
+    this.muted = false;
+    this.volume = 0.5;
+    this.initialized = false;
+  }
+
+  init() {
+    if (this.initialized) return;
+    try {
+      this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      this.initialized = true;
+      // Load mute state from localStorage
+      const storedMute = localStorage.getItem('bricks-game-muted');
+      this.muted = storedMute === 'true';
+      this.updateMuteUI();
+    } catch (e) {
+      console.warn('Web Audio API not supported');
+    }
+  }
+
+  setMuted(value) {
+    this.muted = value;
+    localStorage.setItem('bricks-game-muted', String(value));
+    this.updateMuteUI();
+  }
+
+  updateMuteUI() {
+    if (!muteBtn) return;
+    const soundOnIcon = muteBtn.querySelector('.icon-sound-on');
+    const soundOffIcon = muteBtn.querySelector('.icon-sound-off');
+    if (soundOnIcon) soundOnIcon.classList.toggle('hidden', this.muted);
+    if (soundOffIcon) soundOffIcon.classList.toggle('hidden', !this.muted);
+    muteBtn.setAttribute('aria-pressed', String(this.muted));
+    // Update pause menu toggle
+    if (pauseSoundToggle) {
+      pauseSoundToggle.setAttribute('aria-checked', String(!this.muted));
+    }
+  }
+
+  play(type) {
+    if (this.muted || !this.ctx || !this.initialized) return;
+
+    try {
+      const now = this.ctx.currentTime;
+
+      switch (type) {
+        case 'paddleHit':
+          this.playTone(440, 0.08, 'sine', 0.2);
+          break;
+        case 'wallHit':
+          this.playTone(220, 0.05, 'sine', 0.1);
+          break;
+        case 'brickBreak':
+          this.playTone(523, 0.1, 'square', 0.15);
+          this.playTone(659, 0.1, 'square', 0.1, 0.05);
+          break;
+        case 'specialHit':
+          this.playTone(880, 0.15, 'sine', 0.2);
+          this.playTone(1100, 0.15, 'sine', 0.15, 0.05);
+          break;
+        case 'specialBreak':
+          this.playChord([523, 659, 784], 0.3, 0.2);
+          break;
+        case 'lifeLost':
+          this.playTone(330, 0.3, 'sawtooth', 0.2);
+          this.playTone(220, 0.3, 'sawtooth', 0.15, 0.15);
+          break;
+        case 'levelComplete':
+          this.playChord([523, 659, 784], 0.2, 0.15);
+          this.playChord([587, 740, 880], 0.3, 0.15, 0.2);
+          break;
+        case 'gameOver':
+          this.playTone(294, 0.4, 'sawtooth', 0.15);
+          this.playTone(262, 0.5, 'sawtooth', 0.12, 0.2);
+          break;
+        case 'victory':
+          this.playChord([523, 659, 784], 0.15, 0.2);
+          this.playChord([587, 740, 880], 0.15, 0.2, 0.15);
+          this.playChord([659, 831, 988], 0.4, 0.25, 0.3);
+          break;
+        case 'uiClick':
+          this.playTone(600, 0.04, 'sine', 0.1);
+          break;
+        case 'pause':
+          this.playTone(400, 0.1, 'sine', 0.1);
+          break;
+      }
+    } catch (e) {
+      // Silently fail
+    }
+  }
+
+  playTone(freq, duration, type = 'sine', volume = 0.2, delay = 0) {
+    if (!this.ctx) return;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, this.ctx.currentTime + delay);
+
+    gain.gain.setValueAtTime(0, this.ctx.currentTime + delay);
+    gain.gain.linearRampToValueAtTime(volume * this.volume, this.ctx.currentTime + delay + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + delay + duration);
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+
+    osc.start(this.ctx.currentTime + delay);
+    osc.stop(this.ctx.currentTime + delay + duration + 0.01);
+  }
+
+  playChord(frequencies, duration, volume = 0.15, delay = 0) {
+    frequencies.forEach(freq => {
+      this.playTone(freq, duration, 'sine', volume / frequencies.length, delay);
+    });
+  }
+}
+
+const audioManager = new AudioManager();
+
+// =====================================================
+// ANIMATION MANAGER
+// =====================================================
+class AnimationManager {
+  constructor() {
+    this.scorePopups = [];
+    this.particles = [];
+    this.screenShake = { intensity: 0, duration: 0, elapsed: 0 };
+  }
+
+  addScorePopup(x, y, value, type = 'normal') {
+    this.scorePopups.push({
+      x,
+      y,
+      value,
+      type,
+      lifetime: 0,
+      maxLifetime: 0.8,
+      vx: (Math.random() - 0.5) * 40,
+      vy: -80
+    });
+  }
+
+  addParticles(x, y, color, count = 8) {
+    for (let i = 0; i < count; i++) {
+      const angle = (Math.PI * 2 * i) / count + Math.random() * 0.5;
+      const speed = 80 + Math.random() * 60;
+      this.particles.push({
+        x,
+        y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        color,
+        lifetime: 0,
+        maxLifetime: 0.5 + Math.random() * 0.3,
+        size: 3 + Math.random() * 3
+      });
+    }
+  }
+
+  triggerShake(intensity, duration) {
+    this.screenShake = { intensity, duration, elapsed: 0 };
+  }
+
+  update(dt) {
+    // Update score popups
+    this.scorePopups = this.scorePopups.filter(popup => {
+      popup.lifetime += dt;
+      popup.x += popup.vx * dt;
+      popup.y += popup.vy * dt;
+      popup.vy += 100 * dt; // gravity
+      return popup.lifetime < popup.maxLifetime;
+    });
+
+    // Update particles
+    this.particles = this.particles.filter(p => {
+      p.lifetime += dt;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.vy += 200 * dt; // gravity
+      p.vx *= 0.98; // friction
+      return p.lifetime < p.maxLifetime;
+    });
+
+    // Update screen shake
+    if (this.screenShake.duration > 0) {
+      this.screenShake.elapsed += dt;
+      if (this.screenShake.elapsed >= this.screenShake.duration) {
+        this.screenShake = { intensity: 0, duration: 0, elapsed: 0 };
+      }
+    }
+  }
+
+  getShakeOffset() {
+    if (this.screenShake.duration <= 0) return { x: 0, y: 0 };
+    const progress = this.screenShake.elapsed / this.screenShake.duration;
+    const decay = 1 - progress;
+    const intensity = this.screenShake.intensity * decay;
+    return {
+      x: (Math.random() - 0.5) * intensity * 2,
+      y: (Math.random() - 0.5) * intensity * 2
+    };
+  }
+
+  render(ctx) {
+    // Render particles
+    for (const p of this.particles) {
+      const alpha = 1 - (p.lifetime / p.maxLifetime);
+      ctx.fillStyle = p.color.replace(')', `, ${alpha})`).replace('rgb', 'rgba');
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size * (1 - p.lifetime / p.maxLifetime), 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Render score popups
+    for (const popup of this.scorePopups) {
+      const progress = popup.lifetime / popup.maxLifetime;
+      const alpha = 1 - progress;
+      const scale = 1 + progress * 0.3;
+
+      ctx.save();
+      ctx.translate(popup.x, popup.y);
+      ctx.scale(scale, scale);
+      ctx.globalAlpha = alpha;
+
+      ctx.font = 'bold 18px Inter, system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      // Color based on type
+      let color = '#38bdf8'; // normal - cyan
+      if (popup.type === 'special') color = '#fbbf24'; // gold
+      if (popup.type === 'combo') color = '#a855f7'; // purple
+
+      ctx.fillStyle = color;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 8;
+      ctx.fillText(`+${popup.value}`, 0, 0);
+
+      ctx.restore();
+    }
+  }
+}
+
+const animationManager = new AnimationManager();
+
+// Legacy overlay reference for compatibility
+const overlay = levelOverlay;
+const overlayText = levelTitle;
+const restartBtn = gameoverRestartBtn;
+const levelSelect = pauseLevelSelect;
+const topbar = gameHeader;
+const canvasWrap = canvasContainer;
+const helpBar = gameFooter;
 
 const CANVAS_RATIO = 16 / 10;
 
@@ -521,43 +843,109 @@ function updateHUD() {
   scoreEl.textContent = String(score);
   livesEl.textContent = String(lives);
   levelEl.textContent = String(level);
+
+  // Update high score display
+  const highScore = highScoreManager.getHighScore();
+  if (highScoreEl) {
+    highScoreEl.textContent = String(Math.max(highScore, score));
+  }
+
+  // Update progress bar
+  updateProgressBar();
 }
 
+function updateProgressBar() {
+  if (!progressFill) return;
+  const totalBricks = bricks.length;
+  const brokenBricks = totalBricks - bricksRemaining;
+  const progress = totalBricks > 0 ? (brokenBricks / totalBricks) * 100 : 0;
+  progressFill.style.width = `${progress}%`;
+}
+
+// Hide all overlays
+function hideAllOverlays() {
+  levelOverlay?.classList.add('hidden');
+  pauseOverlay?.classList.add('hidden');
+  gameoverOverlay?.classList.add('hidden');
+  victoryOverlay?.classList.add('hidden');
+}
+
+// Show level intro overlay
+function showLevelOverlay(levelNum, title) {
+  hideAllOverlays();
+  if (levelBadge) levelBadge.textContent = `Level ${levelNum}`;
+  if (levelTitle) levelTitle.textContent = title || 'Get Ready!';
+  levelOverlay?.classList.remove('hidden');
+}
+
+// Show pause overlay
+function showPauseOverlay() {
+  hideAllOverlays();
+  pauseOverlayActive = true;
+  // Update pause overlay stats
+  if (pauseScoreEl) pauseScoreEl.textContent = String(score);
+  if (pauseLevelEl) pauseLevelEl.textContent = String(level);
+  if (pauseLivesEl) pauseLivesEl.textContent = String(lives);
+  // Sync level select
+  if (pauseLevelSelect) pauseLevelSelect.value = String(levelIndex);
+  pauseOverlay?.classList.remove('hidden');
+  resumeBtn?.focus();
+  audioManager.play('pause');
+}
+
+// Show game over overlay
+function showGameOverOverlay() {
+  hideAllOverlays();
+  const isNewHighScore = highScoreManager.checkAndUpdate(score);
+  const highScore = highScoreManager.getHighScore();
+
+  if (finalScoreEl) finalScoreEl.textContent = String(score);
+  if (finalHighScoreEl) finalHighScoreEl.textContent = String(highScore);
+  if (finalBricksEl) finalBricksEl.textContent = String(gameStats.bricksBroken);
+  if (finalLevelEl) finalLevelEl.textContent = String(level);
+  if (newHighScoreEl) {
+    newHighScoreEl.classList.toggle('hidden', !isNewHighScore);
+  }
+
+  gameoverOverlay?.classList.remove('hidden');
+  gameoverRestartBtn?.focus();
+  audioManager.play('gameOver');
+}
+
+// Show victory overlay
+function showVictoryOverlay() {
+  hideAllOverlays();
+  const isNewHighScore = highScoreManager.checkAndUpdate(score);
+  const highScore = highScoreManager.getHighScore();
+
+  if (victoryScoreEl) victoryScoreEl.textContent = String(score);
+  if (victoryHighScoreEl) victoryHighScoreEl.textContent = String(highScore);
+
+  victoryOverlay?.classList.remove('hidden');
+  victoryRestartBtn?.focus();
+  audioManager.play('victory');
+}
+
+// Legacy showOverlay for compatibility
 function showOverlay(text, options = {}) {
-  const showRestartButton = Boolean(options.showRestartButton);
-  const showResumeButton = Boolean(options.showResumeButton);
-  pauseOverlayActive = Boolean(options.fromPause);
-  overlayText.textContent = text;
-  restartBtn.classList.toggle('hidden', !showRestartButton);
-  restartBtn.disabled = !showRestartButton;
-  restartBtn.setAttribute('aria-hidden', String(!showRestartButton));
-  if (resumeBtn) {
-    resumeBtn.classList.toggle('hidden', !showResumeButton);
-    resumeBtn.disabled = !showResumeButton;
-    resumeBtn.setAttribute('aria-hidden', String(!showResumeButton));
+  if (options.fromPause) {
+    showPauseOverlay();
+    return;
   }
-  overlay.classList.remove('hidden');
-  const focusTarget = options.focusButton === 'resume' && showResumeButton
-    ? resumeBtn
-    : options.focusButton === 'restart' && showRestartButton
-      ? restartBtn
-      : null;
-  if (focusTarget) {
-    focusTarget.focus();
+  if (options.showRestartButton && text.includes('Game Over')) {
+    showGameOverOverlay();
+    return;
   }
+  // Default to level overlay
+  const levelMatch = text.match(/Level (\d+)/);
+  const levelNum = levelMatch ? parseInt(levelMatch[1], 10) : level;
+  const title = text.includes('—') ? text.split('—')[1]?.trim() : text;
+  showLevelOverlay(levelNum, title || text);
 }
 
 function hideOverlay() {
+  hideAllOverlays();
   pauseOverlayActive = false;
-  if (resumeBtn) {
-    resumeBtn.classList.add('hidden');
-    resumeBtn.disabled = true;
-    resumeBtn.setAttribute('aria-hidden', 'true');
-  }
-  restartBtn.classList.add('hidden');
-  restartBtn.disabled = true;
-  restartBtn.setAttribute('aria-hidden', 'true');
-  overlay.classList.add('hidden');
 }
 
 function updatePauseButton() {
@@ -565,8 +953,14 @@ function updatePauseButton() {
   const canUse = playing || paused;
   const disabled = (!canUse && !paused) || catCelebrationActive || finaleDanceActive;
   pauseBtn.disabled = disabled;
-  pauseBtn.textContent = paused ? 'Resume' : 'Pause';
   pauseBtn.setAttribute('aria-pressed', String(paused));
+  pauseBtn.setAttribute('aria-label', paused ? 'Resume game' : 'Pause game');
+
+  // Toggle icon visibility
+  const pauseIcon = pauseBtn.querySelector('.icon-pause');
+  const playIcon = pauseBtn.querySelector('.icon-play');
+  if (pauseIcon) pauseIcon.classList.toggle('hidden', paused);
+  if (playIcon) playIcon.classList.toggle('hidden', !paused);
 }
 
 function syncLevelSelect() {
@@ -624,8 +1018,14 @@ function togglePause(forceValue) {
 function updateFullscreenButton() {
   if (!fullscreenBtn) return;
   const active = Boolean(document.fullscreenElement);
-  fullscreenBtn.textContent = active ? 'Exit Fullscreen' : 'Enter Fullscreen';
   fullscreenBtn.setAttribute('aria-pressed', String(active));
+  fullscreenBtn.setAttribute('aria-label', active ? 'Exit fullscreen' : 'Enter fullscreen');
+
+  // Toggle icon visibility
+  const fullscreenIcon = fullscreenBtn.querySelector('.icon-fullscreen');
+  const exitIcon = fullscreenBtn.querySelector('.icon-fullscreen-exit');
+  if (fullscreenIcon) fullscreenIcon.classList.toggle('hidden', active);
+  if (exitIcon) exitIcon.classList.toggle('hidden', !active);
 }
 
 async function toggleFullscreen() {
@@ -643,6 +1043,7 @@ async function toggleFullscreen() {
 function restart() {
   score = 0;
   lives = 3;
+  gameStats.bricksBroken = 0;
   startLevel(0, { message: levels[0]?.intro });
 }
 
@@ -682,6 +1083,57 @@ if (fullscreenBtn) {
     toggleFullscreen();
   });
 }
+
+// Mute button handler
+if (muteBtn) {
+  muteBtn.addEventListener('click', () => {
+    audioManager.init();
+    audioManager.setMuted(!audioManager.muted);
+  });
+}
+
+// Pause menu sound toggle
+if (pauseSoundToggle) {
+  pauseSoundToggle.addEventListener('click', () => {
+    audioManager.init();
+    audioManager.setMuted(!audioManager.muted);
+  });
+}
+
+// Pause menu restart button
+if (pauseRestartBtn) {
+  pauseRestartBtn.addEventListener('click', () => {
+    restart();
+    hideAllOverlays();
+    playing = true;
+    paused = false;
+    pauseOverlayActive = false;
+    updatePauseButton();
+  });
+}
+
+// Victory restart button
+if (victoryRestartBtn) {
+  victoryRestartBtn.addEventListener('click', () => {
+    restart();
+    hideAllOverlays();
+    playing = true;
+    paused = false;
+    pauseOverlayActive = false;
+    updatePauseButton();
+  });
+}
+
+// Initialize audio on first user interaction
+function initAudioOnInteraction() {
+  audioManager.init();
+  window.removeEventListener('click', initAudioOnInteraction);
+  window.removeEventListener('keydown', initAudioOnInteraction);
+  window.removeEventListener('touchstart', initAudioOnInteraction);
+}
+window.addEventListener('click', initAudioOnInteraction);
+window.addEventListener('keydown', initAudioOnInteraction);
+window.addEventListener('touchstart', initAudioOnInteraction);
 
 document.addEventListener('fullscreenchange', () => {
   const active = Boolean(document.fullscreenElement);
@@ -833,6 +1285,9 @@ function seededRandom(seed) {
 }
 
 function update(dt) {
+  // Update animation manager
+  animationManager.update(dt);
+
   for (let b of bricks) {
     if (b.hitFlash > 0) {
       b.hitFlash = Math.max(0, b.hitFlash - dt * 3.6);
@@ -860,9 +1315,9 @@ function update(dt) {
   ball.y += ball.vy * dt;
 
   // Wall collisions
-  if (ball.x - ball.r < 0) { ball.x = ball.r; ball.vx *= -1; }
-  if (ball.x + ball.r > canvas.width) { ball.x = canvas.width - ball.r; ball.vx *= -1; }
-  if (ball.y - ball.r < 0) { ball.y = ball.r; ball.vy *= -1; }
+  if (ball.x - ball.r < 0) { ball.x = ball.r; ball.vx *= -1; audioManager.play('wallHit'); }
+  if (ball.x + ball.r > canvas.width) { ball.x = canvas.width - ball.r; ball.vx *= -1; audioManager.play('wallHit'); }
+  if (ball.y - ball.r < 0) { ball.y = ball.r; ball.vy *= -1; audioManager.play('wallHit'); }
 
   // Paddle collision
   const paddleRect = { x: paddle.x, y: canvas.height - 40, w: paddle.w, h: paddle.h };
@@ -875,6 +1330,7 @@ function update(dt) {
     const speed = Math.hypot(ball.vx, ball.vy) * 1.02; // slight speed up
     ball.vx = Math.sin(angle) * speed;
     ball.vy = -Math.cos(angle) * speed;
+    audioManager.play('paddleHit');
   }
 
   // Bricks collisions (simple O(n))
@@ -899,12 +1355,14 @@ function update(dt) {
   if (ball.y - ball.r > canvas.height) {
     lives -= 1;
     updateHUD();
+    audioManager.play('lifeLost');
+    animationManager.triggerShake(8, 0.3);
     if (lives <= 0) {
       playing = false;
       paused = false;
       pauseOverlayActive = false;
       updatePauseButton();
-      showOverlay('Game Over — Press Restart', { showRestartButton: true });
+      showGameOverOverlay();
     } else {
       resetBall();
     }
@@ -919,19 +1377,39 @@ function handleBrickHit(brick) {
     brick.hitsRemaining = maxHits;
   }
   brick.hitFlash = 0.35;
-  score += brick.special ? 20 : 10;
+  const points = brick.special ? 20 : 10;
+  score += points;
   brick.hitsRemaining = Math.max(0, brick.hitsRemaining - 1);
 
+  // Add score popup at brick center
+  const popupX = brick.x + brick.w / 2;
+  const popupY = brick.y + brick.h / 2;
+  animationManager.addScorePopup(popupX, popupY, points, brick.special ? 'special' : 'normal');
+
   if (brick.hitsRemaining > 0) {
+    // Multi-hit brick - play special hit sound
+    audioManager.play('specialHit');
     updateHUD();
     return;
   }
 
+  // Brick destroyed
   brick.alive = false;
   bricksRemaining = Math.max(0, bricksRemaining - 1);
+  gameStats.bricksBroken++;
+
+  // Add particles at brick position
+  const particleColor = brick.colors?.base || 'rgb(56, 189, 248)';
+  animationManager.addParticles(popupX, popupY, particleColor, brick.special ? 12 : 8);
+
+  // Play appropriate sound
   if (brick.special) {
     specialBricksRemaining = Math.max(0, specialBricksRemaining - 1);
+    audioManager.play('specialBreak');
+  } else {
+    audioManager.play('brickBreak');
   }
+
   const creatureType = getCreatureTypeForBrick(brick);
   if (creatureType) {
     releaseCreature(brick, creatureType);
@@ -946,6 +1424,8 @@ function handleBrickHit(brick) {
 function handleLevelClear() {
   const clearedLevel = level;
   const nextIndex = levelIndex + 1;
+  audioManager.play('levelComplete');
+
   if (levelIndex === 1 && !catCelebrationActive) {
     startCatCelebration(nextIndex);
     return;
@@ -1095,6 +1575,9 @@ function render() {
   ctx.stroke();
   ctx.shadowBlur = 0;
   ctx.shadowColor = 'transparent';
+
+  // Render animations (particles, score popups)
+  animationManager.render(ctx);
 
   // small HUD hint inside canvas
   ctx.fillStyle = 'rgba(226,232,240,0.28)';

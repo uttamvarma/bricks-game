@@ -4,89 +4,258 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Bricks Game</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="src/style.css" />
   </head>
   <body>
-    <header class="topbar" role="banner">
-      <div class="brand">
-        <span class="brand-icon" aria-hidden="true">
-          <svg viewBox="0 0 32 32" focusable="false" aria-hidden="true">
-            <path d="M4 10a6 6 0 0 1 6-6h12a6 6 0 0 1 6 6v12a6 6 0 0 1-6 6H10a6 6 0 0 1-6-6z" />
-            <path d="M12 13h8v2h-8zm0 6h5v2h-5z" />
-            <path d="M9.5 12.5h-3v3h3zm16 5.5h-3v3h3z" />
-          </svg>
-        </span>
-        <div class="brand-text">
-          <h1>Bricks Game</h1>
-          <p class="subtitle">Arcade brick breaker</p>
+    <div class="game-container">
+      <!-- Header -->
+      <header class="game-header" role="banner">
+        <div class="brand">
+          <span class="brand-icon" aria-hidden="true">
+            <svg viewBox="0 0 32 32" focusable="false">
+              <path d="M4 10a6 6 0 0 1 6-6h12a6 6 0 0 1 6 6v12a6 6 0 0 1-6 6H10a6 6 0 0 1-6-6z" />
+              <path d="M12 13h8v2h-8zm0 6h5v2h-5z" />
+              <path d="M9.5 12.5h-3v3h3zm16 5.5h-3v3h3z" />
+            </svg>
+          </span>
+          <div class="brand-text">
+            <h1>Bricks</h1>
+          </div>
         </div>
-      </div>
-      <dl class="hud" aria-label="Game stats">
-        <div class="hud-item">
-          <dt>
-            <span class="hud-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" focusable="false">
-                <path d="M12 3 2 9l10 6 10-6-10-6Zm0 8.47L5.74 8.1 12 4.73l6.26 3.37L12 11.47ZM4 13l8 4.8 8-4.8v2l-8 4.8-8-4.8v-2Z" />
-              </svg>
-            </span>
-            <span class="hud-label">Score</span>
-          </dt>
-          <dd id="score">0</dd>
-        </div>
-        <div class="hud-item">
-          <dt>
-            <span class="hud-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" focusable="false">
-                <path d="M7 4h10l1 5h3v2h-2.1l-1.7 8.5H6.8L5.1 11H3V9h3l1-5Zm1.2 2-1 5h9.6l-1-5H8.2Zm1.3 7 1 5h3l1-5h-5Z" />
-              </svg>
-            </span>
-            <span class="hud-label">Lives</span>
-          </dt>
-          <dd id="lives">3</dd>
-        </div>
-        <div class="hud-item">
-          <dt>
-            <span class="hud-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" focusable="false">
-                <path d="M12 2 3 7v10l9 5 9-5V7l-9-5Zm7 9.3-7 3.89-7-3.9V8.7l7 3.9 7-3.9v2.6Z" />
-              </svg>
-            </span>
-            <span class="hud-label">Level</span>
-          </dt>
-          <dd id="level">1</dd>
-        </div>
-      </dl>
-      <div class="control-bar" role="group" aria-label="Game controls">
-        <button id="pause-btn" type="button" class="control-button">Pause</button>
-        <div class="control-select">
-          <label for="level-select">Level</label>
-          <select id="level-select" aria-label="Choose level to play"></select>
-        </div>
-        <button id="fullscreen-btn" type="button" class="control-button">Enter Fullscreen</button>
-      </div>
-    </header>
 
-    <main>
-      <div class="canvas-wrap">
-        <canvas id="game" aria-label="Bricks Game canvas"></canvas>
-        <div id="overlay" class="overlay hidden" role="alert">
-          <div id="overlay-text"></div>
-          <button id="resume" type="button" class="secondary hidden">Resume</button>
-          <button id="restart" type="button">Restart</button>
+        <div class="stats-bar" aria-label="Game stats">
+          <div class="stat stat-score">
+            <span class="stat-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+              </svg>
+            </span>
+            <div class="stat-content">
+              <span class="stat-label">Score</span>
+              <span class="stat-value" id="score">0</span>
+            </div>
+          </div>
+          <div class="stat stat-best">
+            <span class="stat-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14v1z"/>
+              </svg>
+            </span>
+            <div class="stat-content">
+              <span class="stat-label">Best</span>
+              <span class="stat-value" id="high-score">0</span>
+            </div>
+          </div>
+          <div class="stat stat-lives">
+            <span class="stat-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+              </svg>
+            </span>
+            <div class="stat-content">
+              <span class="stat-label">Lives</span>
+              <span class="stat-value" id="lives">3</span>
+            </div>
+          </div>
+          <div class="stat stat-level">
+            <span class="stat-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <path d="M12 2L4 5v6.09c0 5.05 3.41 9.76 8 10.91 4.59-1.15 8-5.86 8-10.91V5l-8-3zm6 9.09c0 4-2.55 7.7-6 8.83-3.45-1.13-6-4.82-6-8.83V6.31l6-2.25 6 2.25v4.78z"/>
+              </svg>
+            </span>
+            <div class="stat-content">
+              <span class="stat-label">Level</span>
+              <span class="stat-value" id="level">1</span>
+            </div>
+            <div class="progress-bar">
+              <div class="progress-fill" id="progress-fill"></div>
+              <div class="progress-glow"></div>
+            </div>
+          </div>
         </div>
-      </div>
-    </main>
 
-    <footer class="help" role="contentinfo">
-      <p class="help-line">
-        <span class="help-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" focusable="false">
-            <path d="M12 2a10 10 0 1 0 10 10A10.011 10.011 0 0 0 12 2Zm.05 15a1.5 1.5 0 1 1 1.5-1.5 1.51 1.51 0 0 1-1.5 1.5Zm2.45-6.94a2.69 2.69 0 0 1-1.13 1.66l-.56.45a1.31 1.31 0 0 0-.49.89V13h-1.8v-.37a2.9 2.9 0 0 1 1.09-2.26l.56-.45a1.06 1.06 0 0 0 .44-.92 1.3 1.3 0 0 0-2.6 0H8.2A3.1 3.1 0 0 1 14 7a2.92 2.92 0 0 1 .5 3.06Z" />
-          </svg>
-        </span>
-        Use ← → or A / D to move, or drag your finger / mouse. Press Space or tap to (re)start.
-      </p>
-    </footer>
+        <div class="controls" role="group" aria-label="Game controls">
+          <button id="mute-btn" type="button" class="control-btn" aria-label="Toggle sound" aria-pressed="false">
+            <svg class="icon-sound-on" viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+              <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+            </svg>
+            <svg class="icon-sound-off hidden" viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+              <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>
+            </svg>
+          </button>
+          <button id="pause-btn" type="button" class="control-btn" aria-label="Pause game" aria-pressed="false">
+            <svg class="icon-pause" viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+              <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+            </svg>
+            <svg class="icon-play hidden" viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+              <path d="M8 5v14l11-7z"/>
+            </svg>
+          </button>
+          <button id="fullscreen-btn" type="button" class="control-btn" aria-label="Toggle fullscreen">
+            <svg class="icon-fullscreen" viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+              <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
+            </svg>
+            <svg class="icon-fullscreen-exit hidden" viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+              <path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/>
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- Main Game Area -->
+      <main class="game-main">
+        <div class="canvas-container">
+          <canvas id="game" aria-label="Bricks Game canvas"></canvas>
+
+          <!-- Level Intro/Transition Overlay -->
+          <div id="level-overlay" class="overlay level-overlay hidden" role="dialog" aria-modal="true">
+            <div class="overlay-content level-content">
+              <span class="level-badge" id="level-badge">Level 1</span>
+              <h2 class="level-title" id="level-title">Classic Breakout</h2>
+              <p class="level-hint">Press <kbd>Space</kbd> or tap to start</p>
+            </div>
+          </div>
+
+          <!-- Pause Overlay -->
+          <div id="pause-overlay" class="overlay pause-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="pause-title">
+            <div class="overlay-content pause-content glass-panel">
+              <h2 id="pause-title" class="pause-title">Paused</h2>
+
+              <div class="pause-stats">
+                <div class="pause-stat">
+                  <span class="pause-stat-label">Score</span>
+                  <span class="pause-stat-value" id="pause-score">0</span>
+                </div>
+                <div class="pause-stat">
+                  <span class="pause-stat-label">Level</span>
+                  <span class="pause-stat-value" id="pause-level">1</span>
+                </div>
+                <div class="pause-stat">
+                  <span class="pause-stat-label">Lives</span>
+                  <span class="pause-stat-value" id="pause-lives">3</span>
+                </div>
+              </div>
+
+              <div class="pause-actions">
+                <button id="resume-btn" type="button" class="btn btn-primary">
+                  <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                    <path d="M8 5v14l11-7z"/>
+                  </svg>
+                  Resume
+                </button>
+                <button id="pause-restart-btn" type="button" class="btn btn-secondary">
+                  <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                    <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+                  </svg>
+                  Restart
+                </button>
+              </div>
+
+              <div class="pause-settings">
+                <div class="setting-row">
+                  <label for="pause-sound-toggle">Sound Effects</label>
+                  <button id="pause-sound-toggle" class="toggle" role="switch" aria-checked="true">
+                    <span class="toggle-track"></span>
+                    <span class="toggle-thumb"></span>
+                  </button>
+                </div>
+                <div class="setting-row">
+                  <label for="pause-level-select">Select Level</label>
+                  <select id="pause-level-select" class="select-control">
+                    <option value="0">Level 1</option>
+                    <option value="1">Level 2</option>
+                    <option value="2">Level 3</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Game Over Overlay -->
+          <div id="gameover-overlay" class="overlay gameover-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="gameover-title">
+            <div class="overlay-content gameover-content glass-panel">
+              <h2 id="gameover-title" class="gameover-title">Game Over</h2>
+
+              <div class="final-stats">
+                <div class="final-stat final-stat-main">
+                  <span class="final-stat-label">Final Score</span>
+                  <span class="final-stat-value" id="final-score">0</span>
+                </div>
+                <div class="final-stat">
+                  <span class="final-stat-label">High Score</span>
+                  <span class="final-stat-value" id="final-high-score">0</span>
+                </div>
+                <div class="final-stat">
+                  <span class="final-stat-label">Bricks Broken</span>
+                  <span class="final-stat-value" id="final-bricks">0</span>
+                </div>
+                <div class="final-stat">
+                  <span class="final-stat-label">Level Reached</span>
+                  <span class="final-stat-value" id="final-level">1</span>
+                </div>
+              </div>
+
+              <div class="new-high-score hidden" id="new-high-score">
+                <span class="trophy-icon">&#127942;</span>
+                <span>New High Score!</span>
+              </div>
+
+              <div class="gameover-actions">
+                <button id="gameover-restart-btn" type="button" class="btn btn-primary btn-large">
+                  <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                    <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+                  </svg>
+                  Play Again
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Victory Overlay -->
+          <div id="victory-overlay" class="overlay victory-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="victory-title">
+            <div class="overlay-content victory-content glass-panel">
+              <div class="victory-icon">&#127881;</div>
+              <h2 id="victory-title" class="victory-title">Victory!</h2>
+              <p class="victory-subtitle">You completed all levels!</p>
+
+              <div class="final-stats">
+                <div class="final-stat final-stat-main">
+                  <span class="final-stat-label">Final Score</span>
+                  <span class="final-stat-value" id="victory-score">0</span>
+                </div>
+                <div class="final-stat">
+                  <span class="final-stat-label">High Score</span>
+                  <span class="final-stat-value" id="victory-high-score">0</span>
+                </div>
+              </div>
+
+              <div class="gameover-actions">
+                <button id="victory-restart-btn" type="button" class="btn btn-primary btn-large">
+                  <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                    <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+                  </svg>
+                  Play Again
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <!-- Footer -->
+      <footer class="game-footer" role="contentinfo">
+        <p class="controls-hint">
+          <kbd>&#8592;</kbd> <kbd>&#8594;</kbd> or <kbd>A</kbd> <kbd>D</kbd> to move
+          <span class="hint-separator">&#8226;</span>
+          <kbd>Space</kbd> to start
+          <span class="hint-separator">&#8226;</span>
+          <kbd>P</kbd> to pause
+        </p>
+      </footer>
+    </div>
 
     <script src="src/game.js"></script>
   </body>
